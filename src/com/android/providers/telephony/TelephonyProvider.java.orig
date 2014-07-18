@@ -60,7 +60,6 @@ import java.lang.NumberFormatException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 public class TelephonyProvider extends ContentProvider
 {
@@ -94,9 +93,6 @@ public class TelephonyProvider extends ContentProvider
     private static final String PREF_FILE = "preferred-apn";
     private static final String COLUMN_APN_ID = "apn_id";
 
-    private static final String PREF_FILE_FULL_APN = "preferred-full-apn";
-    private static final String DB_VERSION_KEY = "version";
-
     private static final String BUILD_ID_FILE = "build-id";
     private static final String RO_BUILD_ID = "ro_build_id";
 
@@ -104,7 +100,6 @@ public class TelephonyProvider extends ContentProvider
     private static final String OEM_APNS_PATH = "telephony/apns-conf.xml";
     private static final String OTA_UPDATED_APNS_PATH = "misc/apns-conf.xml";
     private static final String OLD_APNS_PATH = "etc/old-apns-conf.xml";
-    private static final String REGIONAL_APNS_PATH = "etc/regional-apns-conf.xml";
 
     private static final String READ_ONLY = "read_only";
 
@@ -112,29 +107,6 @@ public class TelephonyProvider extends ContentProvider
 
     private static final ContentValues s_currentNullMap;
     private static final ContentValues s_currentSetMap;
-
-    private static final int INVALID_APN_ID = -1;
-    private static final List<String> CARRIERS_UNIQUE_FIELDS = new ArrayList<String>();
-
-    static {
-        // Columns not included in UNIQUE constraint: name, current, edited, user, server, password,
-        // authtype, type, protocol, roaming_protocol, sub_id, modem_cognitive, max_conns, wait_time,
-        // max_conns_time, mtu, bearer_bitmask, user_visible
-        CARRIERS_UNIQUE_FIELDS.add(Telephony.Carriers.NUMERIC);
-        CARRIERS_UNIQUE_FIELDS.add(Telephony.Carriers.MCC);
-        CARRIERS_UNIQUE_FIELDS.add(Telephony.Carriers.MNC);
-        CARRIERS_UNIQUE_FIELDS.add(Telephony.Carriers.APN);
-        CARRIERS_UNIQUE_FIELDS.add(Telephony.Carriers.PROXY);
-        CARRIERS_UNIQUE_FIELDS.add(Telephony.Carriers.PORT);
-        CARRIERS_UNIQUE_FIELDS.add(Telephony.Carriers.MMSPROXY);
-        CARRIERS_UNIQUE_FIELDS.add(Telephony.Carriers.MMSPORT);
-        CARRIERS_UNIQUE_FIELDS.add(Telephony.Carriers.MMSC);
-        CARRIERS_UNIQUE_FIELDS.add(Telephony.Carriers.CARRIER_ENABLED);
-        CARRIERS_UNIQUE_FIELDS.add(Telephony.Carriers.BEARER);
-        CARRIERS_UNIQUE_FIELDS.add(Telephony.Carriers.MVNO_TYPE);
-        CARRIERS_UNIQUE_FIELDS.add(Telephony.Carriers.MVNO_MATCH_DATA);
-        CARRIERS_UNIQUE_FIELDS.add(Telephony.Carriers.PROFILE_ID);
-    }
 
     static {
         s_urlMatcher.addURI("telephony", "carriers", URL_TELEPHONY);
@@ -245,9 +217,13 @@ public class TelephonyProvider extends ContentProvider
                     + SubscriptionManager.DATA_ROAMING + " INTEGER DEFAULT " + SubscriptionManager.DATA_ROAMING_DEFAULT + ","
                     + SubscriptionManager.MCC + " INTEGER DEFAULT 0,"
                     + SubscriptionManager.MNC + " INTEGER DEFAULT 0,"
-                    + SubscriptionManager.SUB_STATE + " INTEGER DEFAULT " + SubscriptionManager.ACTIVE  + ","
+<<<<<<< HEAD
+                    + SubscriptionManager.SUB_STATE + " INTEGER DEFAULT " + SubscriptionManager.ACTIVE + ","
                     + SubscriptionManager.NETWORK_MODE+ " INTEGER DEFAULT " + SubscriptionManager.DEFAULT_NW_MODE + ","
                     + SubscriptionManager.USER_NETWORK_MODE + " INTEGER DEFAULT " + RILConstants.PREFERRED_NETWORK_MODE + ","
+=======
+                    + SubscriptionManager.SUB_STATE + " INTEGER DEFAULT " + SubscriptionManager.ACTIVE  + ","
+>>>>>>> 532683e... Add Manual Provisioning support
                     + SubscriptionManager.CB_EXTREME_THREAT_ALERT + " INTEGER DEFAULT 1,"
                     + SubscriptionManager.CB_SEVERE_THREAT_ALERT + " INTEGER DEFAULT 1,"
                     + SubscriptionManager.CB_AMBER_ALERT + " INTEGER DEFAULT 1,"
@@ -258,8 +234,7 @@ public class TelephonyProvider extends ContentProvider
                     + SubscriptionManager.CB_ALERT_SPEECH + " INTEGER DEFAULT 1,"
                     + SubscriptionManager.CB_ETWS_TEST_ALERT + " INTEGER DEFAULT 0,"
                     + SubscriptionManager.CB_CHANNEL_50_ALERT + " INTEGER DEFAULT 1,"
-                    + SubscriptionManager.CB_CHANNEL_60_ALERT + " INTEGER DEFAULT 1,"
-                    + SubscriptionManager.CB_CMAS_TEST_ALERT + " INTEGER DEFAULT 1,"
+                    + SubscriptionManager.CB_CMAS_TEST_ALERT + " INTEGER DEFAULT 0,"
                     + SubscriptionManager.CB_OPT_OUT_DIALOG + " INTEGER DEFAULT 1"
                     + ");");
             if (DBG) log("dbh.createSimInfoTable:-");
@@ -301,18 +276,35 @@ public class TelephonyProvider extends ContentProvider
                     "max_conns_time INTEGER DEFAULT 0," +
                     "mtu INTEGER DEFAULT 0," +
                     "edited INTEGER DEFAULT " + Telephony.Carriers.UNEDITED + "," +
-                    "user_visible BOOLEAN DEFAULT 1," +
                     "read_only BOOLEAN DEFAULT 0," +
                     "ppp_number TEXT DEFAULT ''," +
                     // Uniqueness collisions are used to trigger merge code so if a field is listed
                     // here it means we will accept both (user edited + new apn_conf definition)
                     // Columns not included in UNIQUE constraint: name, current, edited,
                     // user, server, password, authtype, type, protocol, roaming_protocol, sub_id,
-                    // modem_cognitive, max_conns, wait_time, max_conns_time, mtu, bearer_bitmask,
-                    // user_visible
-                    "UNIQUE (name, numeric, mcc, mnc, apn, proxy, port, mmsproxy, mmsport, mmsc," +
-                    "type, carrier_enabled, bearer, mvno_type, mvno_match_data, profile_id));");
+                    // modem_cognitive, max_conns, wait_time, max_conns_time, mtu, bearer_bitmask
+                    "UNIQUE (numeric, mcc, mnc, apn, proxy, port, mmsproxy, mmsport, mmsc," +
+                    "carrier_enabled, bearer, mvno_type, mvno_match_data, profile_id));");
             if (DBG) log("dbh.createCarriersTable:-");
+        }
+
+        private int getDefaultPreferredApnId(SQLiteDatabase db) {
+            int id = -1;
+            String configPref = mContext.getResources().getString(R.string.config_preferred_apn, "");
+            if (!TextUtils.isEmpty(configPref)) {
+                String[] s = configPref.split(",");
+                if (s.length == 3 || s.length == 4) {
+                    Cursor c = db.query("carriers", new String[] { "_id" },
+                            "apn='" + s[0] + "' AND mcc='" + s[1] + "' AND mnc='" + s[2] +
+                            (s.length == 4 ? "' AND protocol='" + s[3] : "") + "'",
+                            null, null, null, null);
+                    if (c.moveToFirst()) {
+                        id = c.getInt(0);
+                    }
+                    c.close();
+                }
+            }
+            return id;
         }
 
         /**
@@ -347,41 +339,20 @@ public class TelephonyProvider extends ContentProvider
             FileReader confreader = null;
             if (DBG) log("confFile = " + confFile);
             try {
-                // Read external APNS data (partner-provided)
                 confreader = new FileReader(confFile);
-                confparser = getXmlParser(confreader);
+                confparser = Xml.newPullParser();
+                confparser.setInput(confreader);
+                XmlUtils.beginDocument(confparser, "apns");
 
-                if (confparser != null) {
-                    // Sanity check. Force internal version and confidential versions to agree
-                    int confversion = Integer.parseInt(confparser.
-                            getAttributeValue(null, "version"));
-                    if (publicversion != confversion) {
-                        log("initDatabase: throwing exception due to version mismatch");
-                        throw new IllegalStateException("Internal APNS file version doesn't match "
-                                + confFile.getAbsolutePath());
-                    }
-
-                    loadApns(db, confparser);
-
-                    try {
-                        if (confreader != null) {
-                            confreader.close();
-                            confreader = null;
-                        }
-                        confparser = null;
-                    } catch (IOException e) { }
+                // Sanity check. Force internal version and confidential versions to agree
+                int confversion = Integer.parseInt(confparser.getAttributeValue(null, "version"));
+                if (publicversion != confversion) {
+                    log("initDatabase: throwing exception due to version mismatch");
+                    throw new IllegalStateException("Internal APNS file version doesn't match "
+                            + confFile.getAbsolutePath());
                 }
 
-                confFile = new File(Environment.getRootDirectory(), REGIONAL_APNS_PATH);
-                if (confFile.exists()) {
-                    confreader = new FileReader(confFile);
-                    confparser = getXmlParser(confreader);
-                    if (confparser != null) {
-                        loadRegionalApns(db, confparser);
-                    }
-                } else {
-                    if (DBG) log("Regional apns file not found");
-                }
+                loadApns(db, confparser);
             } catch (FileNotFoundException e) {
                 // It's ok if the file isn't found. It means there isn't a confidential file
                 // Log.e(TAG, "File not found: '" + confFile.getAbsolutePath() + "'");
@@ -420,22 +391,8 @@ public class TelephonyProvider extends ContentProvider
                     }
                 }
             }
-
             if (VDBG) log("dbh.initDatabase:- db=" + db);
-        }
 
-        private XmlPullParser getXmlParser(FileReader confreader) {
-            XmlPullParser confparser = null;
-            try {
-                confparser = Xml.newPullParser();
-                confparser.setInput(confreader);
-                XmlUtils.beginDocument(confparser, "apns");
-
-            } catch (Exception e) {
-                loge("Exception while parsing apns xml file" + e);
-            }
-
-            return confparser;
         }
 
         private File getNewerFile(File sysApnFile, File altApnFile) {
@@ -658,12 +615,6 @@ public class TelephonyProvider extends ContentProvider
                 // copyPreservedApnsToNewTable()
                 // The only exception if upgrading from version 14 is that EDITED field is already
                 // present (but is called USER_EDITED)
-                /*********************************************************************************
-                 * IMPORTANT NOTE: SINCE CARRIERS TABLE IS RECREATED HERE, IT WILL BE THE LATEST
-                 * VERSION AFTER THIS. AS A RESULT ANY SUBSEQUENT UPDATES TO THE TABLE WILL FAIL
-                 * (DUE TO COLUMN-ALREADY-EXISTS KIND OF EXCEPTION). ALL SUBSEQUENT UPDATES SHOULD
-                 * HANDLE THAT GRACEFULLY.
-                 *********************************************************************************/
                 Cursor c;
                 String[] proj = {"_id"};
                 if (VDBG) {
@@ -733,9 +684,7 @@ public class TelephonyProvider extends ContentProvider
                     db.execSQL("ALTER TABLE " + SIMINFO_TABLE + " ADD COLUMN "
                             + SubscriptionManager.CB_CHANNEL_50_ALERT + " INTEGER DEFAULT 1;");
                     db.execSQL("ALTER TABLE " + SIMINFO_TABLE + " ADD COLUMN "
-                            + SubscriptionManager.CB_CHANNEL_60_ALERT + " INTEGER DEFAULT 1;");
-                    db.execSQL("ALTER TABLE " + SIMINFO_TABLE + " ADD COLUMN "
-                            + SubscriptionManager.CB_CMAS_TEST_ALERT + " INTEGER DEFAULT 1;");
+                            + SubscriptionManager.CB_CMAS_TEST_ALERT + " INTEGER DEFAULT 0;");
                     db.execSQL("ALTER TABLE " + SIMINFO_TABLE + " ADD COLUMN "
                             + SubscriptionManager.CB_OPT_OUT_DIALOG + " INTEGER DEFAULT 1;");
                 } catch (SQLiteException e) {
@@ -1101,10 +1050,8 @@ public class TelephonyProvider extends ContentProvider
             addIntAttribute(parser, "max_conns_time", map, Telephony.Carriers.MAX_CONNS_TIME);
             addIntAttribute(parser, "mtu", map, Telephony.Carriers.MTU);
 
-
             addBoolAttribute(parser, "carrier_enabled", map, Telephony.Carriers.CARRIER_ENABLED);
             addBoolAttribute(parser, "modem_cognitive", map, Telephony.Carriers.MODEM_COGNITIVE);
-            addBoolAttribute(parser, "user_visible", map, Telephony.Carriers.USER_VISIBLE);
             addBoolAttribute(parser, "read_only", map, mContext.getString(R.string.read_only));
 
             String bearerList = parser.getAttributeValue(null, "bearer_bitmask");
@@ -1180,132 +1127,6 @@ public class TelephonyProvider extends ContentProvider
                     db.endTransaction();
                 }
             }
-        }
-
-        /*
-         * Read apns from regional xml file one by one and update them to database
-         * - Replace apn if a match is found from telephony database,
-         * - Add apn if there is no match found from database
-         * @param db the sqlite database to write to
-         * @param parser the xml parser
-         *
-         */
-        private void loadRegionalApns(SQLiteDatabase db, XmlPullParser parser) {
-            if (DBG) log("Reading regional apns file");
-
-            try {
-                String[] apnParams = {Telephony.Carriers.NUMERIC,
-                        Telephony.Carriers.APN,
-                        Telephony.Carriers.NAME,
-                        Telephony.Carriers.TYPE};
-
-                db.beginTransaction();
-                XmlUtils.nextElement(parser);
-                while (parser.getEventType() != XmlPullParser.END_DOCUMENT) {
-                    boolean apnModified = false;
-                    ContentValues row = getRow(parser);
-                    if (row == null) {
-                        throw new XmlPullParserException("Expected 'apn' tag", parser, null);
-                    }
-                    row = setDefaultValue(row);
-
-                    String apnOperation = parser.getAttributeValue(null, "operation");
-                    if (DBG) log("loadRegionalApns: operation on apn: " + apnOperation);
-
-                    /* Construct sqlite query with numeric and apn of xml entry and
-                     * run it on telephony db.
-                     * If a unique match is found, replace it with the apn from xml file.
-                     * Else if multiple apn entries are found with this query,
-                     * re-execute query by adding name, type parameters as well.
-                     * If multiple apn entries are still found with all of these fields, just
-                     * add apn to db.
-                     */
-                    String selection = apnParams[0] + "=" + row.getAsString(apnParams[0]);
-                    for (int i = 0; i < apnParams.length-1; i++) {
-                        selection += " AND " + apnParams[i+1] + "=?";
-                        if (DBG) log("loadRegionalApns: selection: " + selection);
-
-                        //Create a selectionArgs array with values to be passed to sqlite query
-                        String selectionArgs[] = new String[i+1];
-                        for (int j = 0; j <= i; j++) {
-                            selectionArgs[j] = (row.getAsString(apnParams[j+1])).trim();
-                            if (DBG) log("loadRegionalApns: selectionArgs: " + selectionArgs[j]);
-                        }
-
-                        int result = formatApnsInDB(db, row, selection, selectionArgs,
-                                apnOperation);
-                        if (result <= 1) {
-                            apnModified = true;
-                            break;
-                        }
-                     }
-
-                     if (!apnModified && (apnOperation != null &&
-                             !apnOperation.equalsIgnoreCase("delete"))) {
-                         if (DBG) log("loadRegionalApns: Multiple apns found" +
-                                 " in Telephony Database." +
-                                 " Adding regional apn as a new entry");
-                         db.insertWithOnConflict(CARRIERS_TABLE, null, row,
-                                 SQLiteDatabase.CONFLICT_ABORT);
-                     }
-                     XmlUtils.nextElement(parser);
-                }
-                db.setTransactionSuccessful();
-            } catch (XmlPullParserException e) {
-                loge("Got XmlPullParserException while loading apns." + e);
-            } catch (IOException e) {
-                loge("Got IOException while loading apns." + e);
-            } catch (SQLException e) {
-                loge("Got SQLException while loading apns." + e);
-            } finally {
-                db.endTransaction();
-            }
-        }
-
-        private int formatApnsInDB(SQLiteDatabase db, ContentValues row,
-                String selection, String[] selectionArgs, String operation) {
-            int apnCount = 0;
-            String apn = selectionArgs[0];
-
-            try {
-                Cursor cursor = db.query(CARRIERS_TABLE, null, selection,
-                        selectionArgs, null, null, null);
-                if (cursor != null) {
-                    apnCount = cursor.getCount();
-                    if (VDBG) log("apn count: " + apnCount);
-                    if (apnCount > 1) {
-                        if (DBG) log("Multiple apns found in db with same values");
-                    } else if (apnCount == 1) {
-                        if (operation != null) {
-                            if (operation.equalsIgnoreCase("delete")) {
-                                if (DBG) log("Deleting apn in db: " + apn);
-                                db.delete(CARRIERS_TABLE, selection, selectionArgs);
-                            } else if (operation.equalsIgnoreCase("add")) {
-                                if (DBG) log("Adding regional apn to db: " + apn);
-                                db.insertWithOnConflict(CARRIERS_TABLE, null, row,
-                                        SQLiteDatabase.CONFLICT_REPLACE);
-                            }
-                        } else {
-                            if (DBG) log("Replacing apn in db with regional apn: " + apn);
-                            db.delete(CARRIERS_TABLE, selection, selectionArgs);
-                            db.insertWithOnConflict(CARRIERS_TABLE, null, row,
-                                    SQLiteDatabase.CONFLICT_ABORT);
-                        }
-                    } else {
-                        if (!(operation != null &&
-                                operation.equalsIgnoreCase("delete"))) {
-                            if (DBG) log("Adding regional apn to db: " + apn);
-                            db.insertWithOnConflict(CARRIERS_TABLE, null, row,
-                                    SQLiteDatabase.CONFLICT_REPLACE);
-                        }
-                    }
-                    cursor.close();
-                }
-            } catch (SQLException e) {
-                loge("Got SQLException while loading apns." + e);
-            }
-
-            return apnCount;
         }
 
         static public ContentValues setDefaultValue(ContentValues values) {
@@ -1664,124 +1485,52 @@ public class TelephonyProvider extends ContentProvider
     }
 
     private void setPreferredApnId(Long id, int subId) {
-        SharedPreferences sp = getContext().getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE);
+        SharedPreferences sp = getContext().getSharedPreferences(
+                PREF_FILE, Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = sp.edit();
-        editor.putLong(COLUMN_APN_ID + subId, id != null ? id.longValue() : INVALID_APN_ID);
+        editor.putLong(COLUMN_APN_ID + subId, id != null ? id.longValue() : -1);
         editor.apply();
-        // remove saved apn if apnId is invalid
-        if (id == null || id.longValue() == INVALID_APN_ID) {
-            deletePreferredApn(subId);
-        }
     }
 
-    private long getPreferredApnId(int subId, boolean checkApnSp) {
-        SharedPreferences sp = getContext().getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE);
-        long apnId = sp.getLong(COLUMN_APN_ID + subId, INVALID_APN_ID);
-        if (apnId == INVALID_APN_ID && checkApnSp) {
-            apnId = getPreferredApnIdFromApn(subId);
-            if (apnId != INVALID_APN_ID) {
-                setPreferredApnId(apnId, subId);
-                deletePreferredApn(subId);
+    private long getPreferredApnId(int subId) {
+        SharedPreferences sp = getContext().getSharedPreferences(
+                PREF_FILE, Context.MODE_PRIVATE);
+        long id = sp.getLong(COLUMN_APN_ID + subId, -1);
+        if (id == -1) {
+            id = getDefaultPreferredApnId();
+            if (id > -1) {
+                setPreferredApnId(id, subId);
             }
         }
-        return apnId;
+        return id;
+    }
+
+    private long getDefaultPreferredApnId() {
+        long id = -1;
+        String configPref = getContext().getResources().getString(R.string.config_preferred_apn, "");
+        if (!TextUtils.isEmpty(configPref)) {
+            String[] s = configPref.split(",");
+            if (s.length == 3 || s.length == 4) {
+                Cursor c = mOpenHelper.getReadableDatabase().query("carriers", new String[] { "_id" },
+                        "apn='" + s[0] + "' AND mcc='" + s[1] + "' AND mnc='" + s[2] +
+                        (s.length == 4 ? "' AND protocol='" + s[3] : "") + "'",
+                        null, null, null, null);
+                if (c.moveToFirst()) {
+                    id = c.getLong(0);
+                }
+                c.close();
+            }
+        }
+        Log.d(TAG, "Preferred APN: " + id);
+        return id;
     }
 
     private void deletePreferredApnId() {
-        SharedPreferences sp = getContext().getSharedPreferences(PREF_FILE, Context.MODE_PRIVATE);
-        // before deleting, save actual preferred apns (not the ids) in a separate SP
-        Map<String, ?> allPrefApnId = sp.getAll();
-        for (String key : allPrefApnId.keySet()) {
-            // extract subId from key by removing COLUMN_APN_ID
-            try {
-                int subId = Integer.parseInt(key.replace(COLUMN_APN_ID, ""));
-                long apnId = getPreferredApnId(subId, false);
-                if (apnId != INVALID_APN_ID) {
-                    setPreferredApn(apnId, subId);
-                }
-            } catch (Exception e) {
-                loge("Skipping over key " + key + " due to exception " + e);
-            }
-        }
+        SharedPreferences sp = getContext().getSharedPreferences(
+                PREF_FILE, Context.MODE_PRIVATE);
         SharedPreferences.Editor editor = sp.edit();
         editor.clear();
         editor.apply();
-    }
-
-    private void setPreferredApn(Long id, int subId) {
-        log("setPreferredApn: _id " + id + " subId " + subId);
-        SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-        // query all unique fields from id
-        String[] proj = CARRIERS_UNIQUE_FIELDS.toArray(new String[CARRIERS_UNIQUE_FIELDS.size()]);
-        Cursor c = db.query(CARRIERS_TABLE, proj, "_id=" + id, null, null, null, null);
-        if (c != null) {
-            if (c.getCount() == 1) {
-                c.moveToFirst();
-                SharedPreferences sp = getContext().getSharedPreferences(PREF_FILE_FULL_APN,
-                        Context.MODE_PRIVATE);
-                SharedPreferences.Editor editor = sp.edit();
-                // store values of all unique fields to SP
-                for (String key : CARRIERS_UNIQUE_FIELDS) {
-                    editor.putString(key + subId, c.getString(c.getColumnIndex(key)));
-                }
-                // also store the version number
-                editor.putString(DB_VERSION_KEY + subId, "" + DATABASE_VERSION);
-                editor.apply();
-            } else {
-                log("setPreferredApn: # matching APNs found " + c.getCount());
-            }
-            c.close();
-        } else {
-            log("setPreferredApn: No matching APN found");
-        }
-    }
-
-    private long getPreferredApnIdFromApn(int subId) {
-        log("getPreferredApnIdFromApn: for subId " + subId);
-        SQLiteDatabase db = mOpenHelper.getWritableDatabase();
-        String where = TextUtils.join("=? and ", CARRIERS_UNIQUE_FIELDS) + "=?";
-        String[] whereArgs = new String[CARRIERS_UNIQUE_FIELDS.size()];
-        SharedPreferences sp = getContext().getSharedPreferences(PREF_FILE_FULL_APN,
-                Context.MODE_PRIVATE);
-        long apnId = INVALID_APN_ID;
-        int i = 0;
-        for (String key : CARRIERS_UNIQUE_FIELDS) {
-            whereArgs[i] = sp.getString(key + subId, null);
-            if (whereArgs[i] == null) {
-                return INVALID_APN_ID;
-            }
-            i++;
-        }
-        Cursor c = db.query(CARRIERS_TABLE, new String[]{"_id"}, where, whereArgs, null, null, null);
-        if (c != null) {
-            if (c.getCount() == 1) {
-                c.moveToFirst();
-                apnId = c.getInt(c.getColumnIndex("_id"));
-            } else {
-                log("getPreferredApnIdFromApn: returning INVALID. # matching APNs found " +
-                        c.getCount());
-            }
-            c.close();
-        } else {
-            log("getPreferredApnIdFromApn: returning INVALID. No matching APN found");
-        }
-        return apnId;
-    }
-
-    private void deletePreferredApn(int subId) {
-        log("deletePreferredApn: for subId " + subId);
-        SharedPreferences sp = getContext().getSharedPreferences(PREF_FILE_FULL_APN,
-                Context.MODE_PRIVATE);
-        if (sp.contains(DB_VERSION_KEY + subId)) {
-            log("deletePreferredApn: apn is stored. Deleting it now for subId " + subId);
-            SharedPreferences.Editor editor = sp.edit();
-            editor.remove(DB_VERSION_KEY + subId);
-            for (String key : CARRIERS_UNIQUE_FIELDS) {
-                editor.remove(key + subId);
-            }
-            editor.remove(DB_VERSION_KEY + subId);
-            editor.apply();
-        }
     }
 
     @Override
@@ -1808,8 +1557,7 @@ public class TelephonyProvider extends ContentProvider
                     return null;
                 }
                 if (DBG) log("subIdString = " + subIdString + " subId = " + subId);
-                qb.appendWhere("numeric = '" +
-                        mTelephonyManager.getIccOperatorNumericForData(subId)+"'");
+                qb.appendWhere("numeric = '" + mTelephonyManager.getSimOperator(subId)+"'");
                 // FIXME alter the selection to pass subId
                 // selection = selection + "and subId = "
             }
@@ -1858,7 +1606,7 @@ public class TelephonyProvider extends ContentProvider
             //intentional fall through from above case
             case URL_PREFERAPN:
             case URL_PREFERAPN_NO_UPDATE: {
-                qb.appendWhere("_id = " + getPreferredApnId(subId, true));
+                qb.appendWhere("_id = " + getPreferredApnId(subId));
                 break;
             }
 
@@ -2409,6 +2157,7 @@ public class TelephonyProvider extends ContentProvider
         }
         setPreferredApnId((long)-1, subId);
         mOpenHelper.initDatabase(db);
+        setPreferredApnId(getDefaultPreferredApnId(), subId);
     }
 
     private synchronized void updateApnDb() {
