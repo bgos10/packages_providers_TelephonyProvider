@@ -68,12 +68,8 @@ public class TelephonyProvider extends ContentProvider
     private static final boolean DBG = true;
     private static final boolean VDBG = false; // STOPSHIP if true
 
-<<<<<<< HEAD
-    private static final int DATABASE_VERSION = 17 << 16;
-=======
     private static final int DATABASE_VERSION = 21 << 16;
 
->>>>>>> ac686e1... DB: Upgrade the DB to reflect new schema structure for M
     private static final int URL_UNKNOWN = 0;
     private static final int URL_TELEPHONY = 1;
     private static final int URL_CURRENT = 2;
